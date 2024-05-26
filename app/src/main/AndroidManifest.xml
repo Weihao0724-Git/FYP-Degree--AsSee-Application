@@ -17,10 +17,17 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
     </application>
 
+    <!-- Declare that the camera feature is not required -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <!-- Declare that the microphone feature is not required -->
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+
+    <!-- Permissions -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 </manifest>
