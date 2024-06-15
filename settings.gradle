@@ -14,3 +14,8 @@ dependencyResolutionManagement {
 }
 rootProject.name = "AsSee"
 include ':app'
+include ':opencv'
+include ':java'
+include ':test'
+include ':opencv'
+include ':opencv'
