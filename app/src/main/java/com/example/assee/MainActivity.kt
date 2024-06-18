@@ -198,7 +198,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 val score = scores.floatArray[i]
                 if (score > 0.5) {
                     val classIndex = classes.floatArray[i].toInt()
-                    val label = labels[classIndex]
+                    val label = labels[classIndex] + String.format("%.2f%%", score * 100)
+                    val labelonly = labels[classIndex]
                     val location = RectF(
                         locations.floatArray[i * 4 + 1] * mutable.width,
                         locations.floatArray[i * 4] * mutable.height,
@@ -208,17 +209,22 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
                     paint.color = colors[classIndex % colors.size]
                     paint.style = Paint.Style.STROKE
-                    paint.strokeWidth = 5.0f
+                    paint.strokeWidth = 10.0f
                     canvas.drawRect(location, paint)
 
                     paint.style = Paint.Style.FILL
-                    paint.strokeWidth = 1.0f
                     paint.color = Color.WHITE
-                    paint.textSize = 40.0f
+                    paint.textSize = 80.0f
                     canvas.drawText(label, location.left, location.top, paint)
 
                     val distance = calculateDistance(location)
-                    detectedObjects.add("$label at $distance meters")
+                    val position = getPositionDescription(location, mutable.width, mutable.height)
+                    if (distance >= 1) {
+                        detectedObjects.add("Objects at ${String.format("%.2f", distance)} meters, $position")
+                    }else
+                    {
+                        detectedObjects.add("Objects $labelonly at ${String.format("%.2f", distance)} meters, $position")
+                    }
                 }
             }
 
@@ -236,9 +242,28 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun calculateDistance(location: RectF): Float {
-        // Replace this with your actual distance calculation logic
-        return (location.width() + location.height()) / 1000
+        return ((location.width() + location.height() )/7500)
     }
+
+    private fun getPositionDescription(location: RectF, imageWidth: Int, imageHeight: Int): String {
+        val centerX = location.centerX()
+        val centerY = location.centerY()
+
+        val horizontalPosition = when {
+            centerX < imageWidth / 3 -> "left"
+            centerX > 2 * imageWidth / 3 -> "right"
+            else -> "center"
+        }
+
+        val verticalPosition = when {
+            centerY < imageHeight / 3 -> "top"
+            centerY > 2 * imageHeight / 3 -> "bottom"
+            else -> "middle"
+        }
+
+        return "$verticalPosition-$horizontalPosition"
+    }
+
 
     private fun processFrameForTextRecognition(bitmap: Bitmap) {
         try {
