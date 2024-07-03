@@ -19,17 +19,5 @@
         android:layout_alignParentTop="true"
         android:layout_margin="8dp"
         android:contentDescription="@string/app_name" />
-
-    <ToggleButton
-        android:id="@+id/toggleRecognitionMode"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Object Recognition"
-        android:checked="true"
-        android:layout_marginTop="16dp"
-        android:layout_marginEnd="16dp"
-        android:layout_alignParentTop="true"
-        android:layout_alignParentEnd="true"/>
-
 </RelativeLayout>
 

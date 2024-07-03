@@ -1,21 +1,26 @@
 package com.example.assee
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.*
 import android.hardware.camera2.*
 import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
+import android.speech.RecognizerIntent
+import android.speech.RecognitionListener
+import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.util.Size
 import android.view.Surface
 import android.view.TextureView
 import android.widget.ImageView
-import android.widget.ToggleButton
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.assee.ml.SsdMobilenetV11Metadata1
 import com.google.mlkit.vision.common.InputImage
@@ -26,7 +31,6 @@ import org.tensorflow.lite.support.image.ImageProcessor
 import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.support.image.ops.ResizeOp
 import java.util.*
-import kotlin.collections.ArrayList
 
 class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
@@ -49,7 +53,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     private var currentMode = RecognitionMode.OBJECT_DETECTION
     private var isTextRecognized = false
-    private var lastSpokenTime = 0L
+    private var lastDetectedObjects: List<String> = emptyList()
 
     enum class RecognitionMode {
         OBJECT_DETECTION,
@@ -62,7 +66,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
         textureView = findViewById(R.id.textureView)
         imageView = findViewById(R.id.imageView)
-        val toggleRecognitionMode: ToggleButton = findViewById(R.id.toggleRecognitionMode)
 
         getPermissions()
 
@@ -75,14 +78,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         handler = Handler(handlerThread.looper)
 
         tts = TextToSpeech(this, this)
-
-        toggleRecognitionMode.setOnCheckedChangeListener { _, isChecked ->
-            currentMode = if (isChecked) {
-                RecognitionMode.OBJECT_DETECTION
-            } else {
-                RecognitionMode.TEXT_RECOGNITION
-            }
-        }
 
         textureView.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
             override fun onSurfaceTextureAvailable(surfaceTexture: SurfaceTexture, width: Int, height: Int) {
@@ -107,6 +102,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
 
         cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
+
+        initializeSpeechRecognition()
     }
 
     override fun onDestroy() {
@@ -176,7 +173,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             e.printStackTrace()
         }
     }
-
     private fun processFrameForObjectDetection(bitmap: Bitmap) {
         try {
             var tfImage = TensorImage.fromBitmap(bitmap)
@@ -192,14 +188,16 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             val mutable = bitmap.copy(Bitmap.Config.ARGB_8888, true)
             val canvas = Canvas(mutable)
 
-            val detectedObjects = mutableListOf<String>()
+            val detectedObjects = mutableSetOf<String>()
+            val detectedObjectsLabel = mutableSetOf<String>()
+            val detectedObjectsInfo = mutableMapOf<String, Pair<String, String>>()
 
             for (i in 0 until numDetections.floatArray[0].toInt()) {
                 val score = scores.floatArray[i]
                 if (score > 0.5) {
                     val classIndex = classes.floatArray[i].toInt()
                     val label = labels[classIndex] + String.format("%.2f%%", score * 100)
-                    val labelonly = labels[classIndex]
+                    val labelOnly = labels[classIndex]
                     val location = RectF(
                         locations.floatArray[i * 4 + 1] * mutable.width,
                         locations.floatArray[i * 4] * mutable.height,
@@ -207,42 +205,49 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                         locations.floatArray[i * 4 + 2] * mutable.height
                     )
 
+                    detectedObjects.add(label)
+                    detectedObjectsLabel.add(labelOnly)
+
                     paint.color = colors[classIndex % colors.size]
                     paint.style = Paint.Style.STROKE
-                    paint.strokeWidth = 10.0f
+                    paint.strokeWidth = 2.0f
                     canvas.drawRect(location, paint)
 
                     paint.style = Paint.Style.FILL
-                    paint.color = Color.WHITE
-                    paint.textSize = 80.0f
-                    canvas.drawText(label, location.left, location.top, paint)
+                    val boxedLocation = location.apply { inset(-10f, -10f) }
+                    paint.alpha = 50
+                    canvas.drawRect(boxedLocation, paint)
+                    paint.alpha = 255
 
-                    val distance = calculateDistance(location)
-                    val position = getPositionDescription(location, mutable.width, mutable.height)
-                    if (distance >= 1) {
-                        detectedObjects.add("Objects at ${String.format("%.2f", distance)} meters, $position")
-                    }else
-                    {
-                        detectedObjects.add("Objects $labelonly at ${String.format("%.2f", distance)} meters, $position")
-                    }
+                    val distanceDescription = getDistanceDescription(location, mutable.width, mutable.height)
+                    val positionDescription = getPositionDescription(location, mutable.width, mutable.height)
+
+                    detectedObjectsInfo[labelOnly] = Pair(distanceDescription, positionDescription)
                 }
-            }
-
-            if (detectedObjects.isNotEmpty() && System.currentTimeMillis() - lastSpokenTime > 5000) {
-                tts.speak(detectedObjects.joinToString(", "), TextToSpeech.QUEUE_FLUSH, null, null)
-                lastSpokenTime = System.currentTimeMillis()
             }
 
             runOnUiThread {
                 imageView.setImageBitmap(mutable)
+
+                val newObjects = detectedObjectsLabel.subtract(lastDetectedObjects)
+                newObjects.forEach { newObject ->
+                    val (distanceDescription, positionDescription) = detectedObjectsInfo[newObject] ?: Pair("", "")
+                    val message = "New object detected: $newObject. $distanceDescription $positionDescription"
+                    tts.speak(message, TextToSpeech.QUEUE_ADD, null, null)
+                }
+
+                lastDetectedObjects = detectedObjectsLabel.toList()
             }
+
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
-    private fun calculateDistance(location: RectF): Float {
-        return ((location.width() + location.height() )/7500)
+    private fun getDistanceDescription(location: RectF, imageWidth: Int, imageHeight: Int): String {
+        val relativeArea = (location.width() * location.height()) / (imageWidth * imageHeight)
+        val distance = 1 / Math.sqrt(relativeArea.toDouble())
+        return "Distance: %.2f meters".format(distance)
     }
 
     private fun getPositionDescription(location: RectF, imageWidth: Int, imageHeight: Int): String {
@@ -258,55 +263,44 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         val verticalPosition = when {
             centerY < imageHeight / 3 -> "top"
             centerY > 2 * imageHeight / 3 -> "bottom"
-            else -> "middle"
+            else -> "center"
         }
 
-        return "$verticalPosition-$horizontalPosition"
+        return "Position: $horizontalPosition, $verticalPosition"
     }
 
-
     private fun processFrameForTextRecognition(bitmap: Bitmap) {
-        try {
-            val image = InputImage.fromBitmap(bitmap, 0)
-            recognizer.process(image)
-                .addOnSuccessListener { visionText ->
-                    val resultText = visionText.text
-                    tts.speak(resultText, TextToSpeech.QUEUE_FLUSH, null, null)
+        val image = InputImage.fromBitmap(bitmap, 0)
+        recognizer.process(image)
+            .addOnSuccessListener { visionText ->
+                val recognizedText = visionText.text
+                if (recognizedText.isNotEmpty() && !isTextRecognized) {
+                    val cleanedText = recognizedText.replaceFirst("\\s+".toRegex(), "")
+                    tts.speak(cleanedText, TextToSpeech.QUEUE_ADD, null, null)
                     isTextRecognized = true
                 }
-                .addOnFailureListener { e ->
-                    e.printStackTrace()
-                }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+            }
+            .addOnFailureListener { e ->
+                e.printStackTrace()
+            }
     }
 
     private fun getPermissions() {
-        val permissions = mutableListOf<String>()
-        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            permissions.add(android.Manifest.permission.CAMERA)
-        }
-        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            permissions.add(android.Manifest.permission.RECORD_AUDIO)
-        }
-        if (permissions.isNotEmpty()) {
-            requestPermissions(permissions.toTypedArray(), 101)
-        }
-    }
+        val permissionCamera = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+        val permissionRecordAudio = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (grantResults.any { it != PackageManager.PERMISSION_GRANTED }) {
-            getPermissions()
-        }
-    }
+        val listPermissionsNeeded = mutableListOf<String>()
 
-    override fun onInit(status: Int) {
-        if (status == TextToSpeech.SUCCESS) {
-            tts.language = Locale.US
-        } else {
-            Toast.makeText(this, "TTS initialization failed", Toast.LENGTH_SHORT).show()
+        if (permissionCamera != PackageManager.PERMISSION_GRANTED) {
+            listPermissionsNeeded.add(Manifest.permission.CAMERA)
+        }
+
+        if (permissionRecordAudio != PackageManager.PERMISSION_GRANTED) {
+            listPermissionsNeeded.add(Manifest.permission.RECORD_AUDIO)
+        }
+
+        if (listPermissionsNeeded.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, listPermissionsNeeded.toTypedArray(), 100)
         }
     }
 
@@ -314,5 +308,61 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         override fun compare(o1: Size, o2: Size): Int {
             return java.lang.Long.signum(o1.width.toLong() * o1.height - o2.width.toLong() * o2.height)
         }
+    }
+
+    override fun onInit(status: Int) {
+        if (status == TextToSpeech.SUCCESS) {
+            val result = tts.setLanguage(Locale.US)
+            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                Toast.makeText(this, "TTS: Language is not supported", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            Toast.makeText(this, "TTS: Initialization failed", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun initializeSpeechRecognition() {
+        val speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+        val speechIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+        speechIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+        speechIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+
+        val restartListening = {
+            speechRecognizer.stopListening()
+            speechRecognizer.startListening(speechIntent)
+        }
+
+        speechRecognizer.setRecognitionListener(object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) {}
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() {
+                restartListening()
+            }
+
+            override fun onError(error: Int) {
+                restartListening()
+            }
+
+            override fun onResults(results: Bundle?) {
+                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                if (matches != null) {
+                    val command = matches[0].lowercase(Locale.getDefault())
+                    if (command.contains("object")) {
+                        currentMode = RecognitionMode.OBJECT_DETECTION
+                    } else if (command.contains("text")) {
+                        currentMode = RecognitionMode.TEXT_RECOGNITION
+                        isTextRecognized = false
+                    }
+                }
+                restartListening()
+            }
+
+            override fun onPartialResults(partialResults: Bundle?) {}
+            override fun onEvent(eventType: Int, params: Bundle?) {}
+        })
+
+        restartListening()
     }
 }
