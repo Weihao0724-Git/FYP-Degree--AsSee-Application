@@ -51,7 +51,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private lateinit var tts: TextToSpeech
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
 
-    private var currentMode = RecognitionMode.OBJECT_DETECTION
+    private var currentMode = RecognitionMode.TEXT_RECOGNITION
     private var isTextRecognized = false
     private var lastDetectedObjects: List<String> = emptyList()
 
@@ -323,13 +323,25 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     private fun initializeSpeechRecognition() {
         val speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
-        val speechIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-        speechIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-        speechIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+        val speechIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+        }
+
+        var isListening = false
+        val handler = Handler()
 
         val restartListening = {
-            speechRecognizer.stopListening()
-            speechRecognizer.startListening(speechIntent)
+            if (isListening) {
+                isListening = false
+                speechRecognizer.stopListening()
+            }
+            handler.postDelayed({
+                if (!isListening) {
+                    speechRecognizer.startListening(speechIntent)
+                    isListening = true
+                }
+            }, 500) // Add a delay to debounce restarts
         }
 
         speechRecognizer.setRecognitionListener(object : RecognitionListener {
