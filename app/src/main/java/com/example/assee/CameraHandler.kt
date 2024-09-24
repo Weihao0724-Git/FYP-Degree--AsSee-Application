@@ -47,7 +47,7 @@ class CameraHandler(
 
         override fun onSurfaceTextureUpdated(surfaceTexture: SurfaceTexture) {
             if (textureView.isAvailable && isCapturingFrames) {
-                textureView.bitmap?.let { bitmap ->
+                textureView.bitmap?.let { bitmap ->  // Use a safe call with let
                     frameCaptureCallback?.invoke(bitmap)
                 }
             }

@@ -98,8 +98,8 @@ class ObjectDetection(
         val centerX = (location[1] + location[3]) / 2 * width
         val centerY = (location[0] + location[2]) / 2 * height
 
-        val horizontalMargin = width / 10
-        val verticalMargin = height / 10
+        val horizontalMargin = width / 30  // 10% margin on left and right
+        val verticalMargin = height / 30   // 10% margin on top and bottom
 
         val verticalPosition = when {
             centerY < height / 3 - verticalMargin -> "top"
