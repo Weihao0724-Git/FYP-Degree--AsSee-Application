@@ -1,5 +1,5 @@
-<?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
@@ -11,13 +11,51 @@
     <ImageView
         android:id="@+id/imageView"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_alignParentBottom="true"
-        android:layout_alignParentEnd="true"
-        android:layout_alignParentRight="true"
-        android:layout_alignParentStart="true"
-        android:layout_alignParentTop="true"
-        android:layout_margin="8dp"
-        android:contentDescription="@string/app_name" />
-</RelativeLayout>
+        android:layout_height="match_parent"/>
 
+    <Button
+        android:id="@+id/button1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="8dp"
+        android:backgroundTint="#0000FF"
+        android:drawablePadding="10dp"
+        android:text="Voice Assistant"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        app:cornerRadius="0dp"
+        app:icon="@drawable/baseline_mic_24"
+        app:iconSize="24dp" />
+
+    <Button
+        android:id="@+id/button2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_above="@+id/button1"
+        android:layout_marginBottom="8dp"
+        android:backgroundTint="#FFD700"
+        android:drawablePadding="10dp"
+        android:text="Text Recognition"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        app:cornerRadius="0dp"
+        app:icon="@drawable/baseline_document_scanner_24"
+        app:iconSize="24dp" />
+
+    <Button
+        android:id="@+id/button3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_above="@+id/button2"
+        android:layout_marginBottom="8dp"
+        android:backgroundTint="#800080"
+        android:drawablePadding="10dp"
+        android:text="Object Detection"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        app:cornerRadius="0dp"
+        app:icon="@drawable/baseline_crop_free_24"
+        app:iconSize="24dp" />
+
+</RelativeLayout>
